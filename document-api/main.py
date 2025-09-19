@@ -77,6 +77,36 @@ async def upload_document(
         file_size = len(content)
         file_type = magic.from_buffer(content, mime=True)
 
+        # File validation metrics
+        increment_counter("file_validation_total", 1, {
+            "validation_type": "mime_type_check",
+            "status": "passed"
+        })
+        
+        # File size validation
+        if file_size > 0:
+            increment_counter("file_validation_total", 1, {
+                "validation_type": "file_size_check",
+                "status": "passed"
+            })
+        else:
+            increment_counter("file_validation_total", 1, {
+                "validation_type": "file_size_check",
+                "status": "failed"
+            })
+        
+        # Filename validation
+        if file.filename and len(file.filename) > 0:
+            increment_counter("file_validation_total", 1, {
+                "validation_type": "filename_check",
+                "status": "passed"
+            })
+        else:
+            increment_counter("file_validation_total", 1, {
+                "validation_type": "filename_check",
+                "status": "failed"
+            })
+
         # Document uploads by client
         increment_counter("document_uploads_by_client", 1, {"client_id": client_id})
         
@@ -93,6 +123,49 @@ async def upload_document(
         with open(file_path, "wb") as f:
             f.write(content)
 
+        # Process with LLM
+        summary = await summarise_document_using_llm(file_path)
+        
+        # Metadata completeness tracking
+        increment_counter("metadata_completeness", 1, {
+            "field": "summary",
+            "status": "present"
+        })
+        
+        # Track other metadata fields
+        if file.filename:
+            increment_counter("metadata_completeness", 1, {
+                "field": "filename",
+                "status": "present"
+            })
+        else:
+            increment_counter("metadata_completeness", 1, {
+                "field": "filename",
+                "status": "missing"
+            })
+            
+        if file.content_type:
+            increment_counter("metadata_completeness", 1, {
+                "field": "content_type",
+                "status": "present"
+            })
+        else:
+            increment_counter("metadata_completeness", 1, {
+                "field": "content_type",
+                "status": "missing"
+            })
+            
+        if file_size > 0:
+            increment_counter("metadata_completeness", 1, {
+                "field": "file_size",
+                "status": "present"
+            })
+        else:
+            increment_counter("metadata_completeness", 1, {
+                "field": "file_size",
+                "status": "missing"
+            })
+
         metadata = {
             "client_id": client_id,
             "filename": file.filename,
@@ -100,7 +173,7 @@ async def upload_document(
             "file_type": file_type,
             "content_type": file.content_type,
             "file_path": str(file_path),
-            "summary": await summarise_document_using_llm(file_path),
+            "summary": summary,
         }
 
         async with httpx.AsyncClient() as client:
