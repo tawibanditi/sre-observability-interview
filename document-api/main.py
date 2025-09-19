@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -45,8 +46,16 @@ async def upload_document(
     try:
         content = await file.read()
         file_size = len(content)
-
         file_type = magic.from_buffer(content, mime=True)
+
+        # Document uploads by client
+        increment_counter("document_uploads_by_client", 1, {"client_id": client_id})
+        
+        # File type distribution
+        increment_counter("document_uploads_by_type", 1, {"file_type": file_type})
+        
+        # Document size distribution
+        record_histogram_value("document_size_bytes", file_size, {"client_id": client_id})
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_filename = f"{client_id}_{timestamp}_{file.filename}"
@@ -74,12 +83,17 @@ async def upload_document(
 
             if response.status_code != 200:
                 logger.error(f"Failed to store metadata: {response.text}")
+                # Document upload failure
+                increment_counter("document_uploads_total", 1, {"status": "failed"})
                 raise HTTPException(
                     status_code=500, detail="Failed to store document metadata"
                 )
 
             stored_metadata = response.json()
 
+        # Document upload success
+        increment_counter("document_uploads_total", 1, {"status": "success"})
+        
         logger.info(
             f"Successfully uploaded document: {file.filename} for client: {client_id}"
         )
@@ -96,9 +110,13 @@ async def upload_document(
 
     except httpx.RequestError as e:
         logger.error(f"Error communicating with data-store: {str(e)}")
+        # Document upload failure
+        increment_counter("document_uploads_total", 1, {"status": "failed"})
         raise HTTPException(status_code=503, detail="Data store service unavailable")
     except Exception as e:
         logger.error(f"Error uploading document: {str(e)}")
+        # Document upload failure
+        increment_counter("document_uploads_total", 1, {"status": "failed"})
         raise HTTPException(status_code=500, detail="Failed to upload document")
     finally:
         if file_path and file_path.exists():
