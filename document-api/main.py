@@ -107,6 +107,9 @@ async def upload_document(
                 "status": "failed"
             })
 
+        # Active clients tracking
+        increment_counter("active_clients_total", 1, {"client_id": client_id})
+        
         # Document uploads by client
         increment_counter("document_uploads_by_client", 1, {"client_id": client_id})
         
@@ -202,6 +205,9 @@ async def upload_document(
         # Document upload success
         increment_counter("document_uploads_total", 1, {"status": "success"})
         
+        # Client document count tracking
+        increment_counter("client_document_count", 1, {"client_id": client_id})
+        
         # API request success tracking
         increment_counter("api_requests_total", 1, {
             "endpoint": "/clients/{client_id}/upload-document",
@@ -286,6 +292,9 @@ async def retrieve_document_metadata(
 ):
     """Retrieve document metadata by client ID and document ID."""
     start_time = time.time()
+    
+    # Track active clients on document retrieval
+    increment_counter("active_clients_total", 1, {"client_id": client_id})
     
     try:
         async with httpx.AsyncClient() as client:
