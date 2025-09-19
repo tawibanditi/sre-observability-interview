@@ -112,6 +112,12 @@ async def upload_document(
                 logger.error(f"Failed to store metadata: {response.text}")
                 # Document upload failure
                 increment_counter("document_uploads_total", 1, {"status": "failed"})
+                # HTTP error tracking
+                increment_counter("http_errors_total", 1, {
+                    "status_code": "500",
+                    "endpoint": "/clients/{client_id}/upload-document",
+                    "service": "data-store"
+                })
                 raise HTTPException(
                     status_code=500, detail="Failed to store document metadata"
                 )
@@ -139,11 +145,35 @@ async def upload_document(
         logger.error(f"Error communicating with data-store: {str(e)}")
         # Document upload failure
         increment_counter("document_uploads_total", 1, {"status": "failed"})
+        # HTTP error tracking
+        increment_counter("http_errors_total", 1, {
+            "status_code": "503",
+            "endpoint": "/clients/{client_id}/upload-document",
+            "service": "data-store"
+        })
+        # Exception tracking
+        increment_counter("exceptions_total", 1, {
+            "exception_type": "httpx.RequestError",
+            "service": "document-api",
+            "operation": "data_store_communication"
+        })
         raise HTTPException(status_code=503, detail="Data store service unavailable")
     except Exception as e:
         logger.error(f"Error uploading document: {str(e)}")
         # Document upload failure
         increment_counter("document_uploads_total", 1, {"status": "failed"})
+        # HTTP error tracking
+        increment_counter("http_errors_total", 1, {
+            "status_code": "500",
+            "endpoint": "/clients/{client_id}/upload-document",
+            "service": "document-api"
+        })
+        # Exception tracking
+        increment_counter("exceptions_total", 1, {
+            "exception_type": type(e).__name__,
+            "service": "document-api",
+            "operation": "document_upload"
+        })
         raise HTTPException(status_code=500, detail="Failed to upload document")
     finally:
         if file_path and file_path.exists():
@@ -162,9 +192,21 @@ async def retrieve_document_metadata(
             )
 
             if response.status_code == 404:
+                # HTTP error tracking for not found
+                increment_counter("http_errors_total", 1, {
+                    "status_code": "404",
+                    "endpoint": "/clients/{client_id}/documents/{document_id}",
+                    "service": "data-store"
+                })
                 raise HTTPException(status_code=404, detail="Document not found")
             elif response.status_code != 200:
                 logger.error(f"Failed to retrieve metadata: {response.text}")
+                # HTTP error tracking
+                increment_counter("http_errors_total", 1, {
+                    "status_code": "500",
+                    "endpoint": "/clients/{client_id}/documents/{document_id}",
+                    "service": "data-store"
+                })
                 raise HTTPException(
                     status_code=500, detail="Failed to retrieve document metadata"
                 )
@@ -178,11 +220,35 @@ async def retrieve_document_metadata(
 
     except httpx.RequestError as e:
         logger.error(f"Error communicating with data-store: {str(e)}")
+        # HTTP error tracking
+        increment_counter("http_errors_total", 1, {
+            "status_code": "503",
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "service": "data-store"
+        })
+        # Exception tracking
+        increment_counter("exceptions_total", 1, {
+            "exception_type": "httpx.RequestError",
+            "service": "document-api",
+            "operation": "data_store_communication"
+        })
         raise HTTPException(status_code=503, detail="Data store service unavailable")
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error retrieving document metadata: {str(e)}")
+        # HTTP error tracking
+        increment_counter("http_errors_total", 1, {
+            "status_code": "500",
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "service": "document-api"
+        })
+        # Exception tracking
+        increment_counter("exceptions_total", 1, {
+            "exception_type": type(e).__name__,
+            "service": "document-api",
+            "operation": "document_retrieval"
+        })
         raise HTTPException(
             status_code=500, detail="Failed to retrieve document metadata"
         )
