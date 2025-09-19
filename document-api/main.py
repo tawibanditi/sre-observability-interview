@@ -70,6 +70,8 @@ async def upload_document(
 ):
     """Upload a document and store its metadata for a specific client."""
     file_path = None
+    start_time = time.time()
+    
     try:
         content = await file.read()
         file_size = len(content)
@@ -127,6 +129,13 @@ async def upload_document(
         # Document upload success
         increment_counter("document_uploads_total", 1, {"status": "success"})
         
+        # API request success tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/upload-document",
+            "method": "PUT",
+            "status_code": "200"
+        })
+        
         logger.info(
             f"Successfully uploaded document: {file.filename} for client: {client_id}"
         )
@@ -145,6 +154,12 @@ async def upload_document(
         logger.error(f"Error communicating with data-store: {str(e)}")
         # Document upload failure
         increment_counter("document_uploads_total", 1, {"status": "failed"})
+        # API request failure tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/upload-document",
+            "method": "PUT",
+            "status_code": "503"
+        })
         # HTTP error tracking
         increment_counter("http_errors_total", 1, {
             "status_code": "503",
@@ -162,6 +177,12 @@ async def upload_document(
         logger.error(f"Error uploading document: {str(e)}")
         # Document upload failure
         increment_counter("document_uploads_total", 1, {"status": "failed"})
+        # API request failure tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/upload-document",
+            "method": "PUT",
+            "status_code": "500"
+        })
         # HTTP error tracking
         increment_counter("http_errors_total", 1, {
             "status_code": "500",
@@ -176,6 +197,13 @@ async def upload_document(
         })
         raise HTTPException(status_code=500, detail="Failed to upload document")
     finally:
+        # Track request duration
+        request_duration = time.time() - start_time
+        record_histogram_value("api_request_duration_seconds", request_duration, {
+            "endpoint": "/clients/{client_id}/upload-document",
+            "method": "PUT"
+        })
+        
         if file_path and file_path.exists():
             file_path.unlink()
 
@@ -184,6 +212,8 @@ async def retrieve_document_metadata(
     client_id: str, document_id: int, settings=Depends(get_settings)
 ):
     """Retrieve document metadata by client ID and document ID."""
+    start_time = time.time()
+    
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
@@ -192,6 +222,12 @@ async def retrieve_document_metadata(
             )
 
             if response.status_code == 404:
+                # API request not found tracking
+                increment_counter("api_requests_total", 1, {
+                    "endpoint": "/clients/{client_id}/documents/{document_id}",
+                    "method": "GET",
+                    "status_code": "404"
+                })
                 # HTTP error tracking for not found
                 increment_counter("http_errors_total", 1, {
                     "status_code": "404",
@@ -201,6 +237,12 @@ async def retrieve_document_metadata(
                 raise HTTPException(status_code=404, detail="Document not found")
             elif response.status_code != 200:
                 logger.error(f"Failed to retrieve metadata: {response.text}")
+                # API request error tracking
+                increment_counter("api_requests_total", 1, {
+                    "endpoint": "/clients/{client_id}/documents/{document_id}",
+                    "method": "GET",
+                    "status_code": "500"
+                })
                 # HTTP error tracking
                 increment_counter("http_errors_total", 1, {
                     "status_code": "500",
@@ -213,6 +255,13 @@ async def retrieve_document_metadata(
 
             metadata = response.json()
 
+        # API request success tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "method": "GET",
+            "status_code": "200"
+        })
+
         logger.info(
             f"Retrieved metadata for document ID: {document_id} (client: {client_id})"
         )
@@ -220,6 +269,12 @@ async def retrieve_document_metadata(
 
     except httpx.RequestError as e:
         logger.error(f"Error communicating with data-store: {str(e)}")
+        # API request error tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "method": "GET",
+            "status_code": "503"
+        })
         # HTTP error tracking
         increment_counter("http_errors_total", 1, {
             "status_code": "503",
@@ -237,6 +292,12 @@ async def retrieve_document_metadata(
         raise
     except Exception as e:
         logger.error(f"Error retrieving document metadata: {str(e)}")
+        # API request error tracking
+        increment_counter("api_requests_total", 1, {
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "method": "GET",
+            "status_code": "500"
+        })
         # HTTP error tracking
         increment_counter("http_errors_total", 1, {
             "status_code": "500",
@@ -252,6 +313,13 @@ async def retrieve_document_metadata(
         raise HTTPException(
             status_code=500, detail="Failed to retrieve document metadata"
         )
+    finally:
+        # Track request duration
+        request_duration = time.time() - start_time
+        record_histogram_value("api_request_duration_seconds", request_duration, {
+            "endpoint": "/clients/{client_id}/documents/{document_id}",
+            "method": "GET"
+        })
 
 
 if __name__ == "__main__":
