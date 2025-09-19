@@ -31,10 +31,37 @@ async def health_check():
 
 async def summarise_document_using_llm(file_path):
     """Summarise the document using a large language model."""
-
-    # Call to real LLM API would go here - lets simulate with a sleep to fake the expensive LLM call
-    await asyncio.sleep(10)
-    return "This is a summary of the document."
+    
+    # Track LLM processing start time
+    start_time = time.time()
+    
+    try:
+        # Call to real LLM API would go here - lets simulate with a sleep to fake the expensive LLM call
+        await asyncio.sleep(10)
+        
+        # Calculate processing duration
+        processing_time = time.time() - start_time
+        
+        # Track successful LLM processing
+        increment_counter("llm_processing_total", 1, {"status": "success"})
+        
+        # Track LLM processing duration
+        record_histogram_value("llm_processing_duration_seconds", processing_time)
+        
+        return "This is a summary of the document."
+        
+    except Exception as e:
+        # Calculate processing duration even on failure
+        processing_time = time.time() - start_time
+        
+        # Track failed LLM processing
+        increment_counter("llm_processing_total", 1, {"status": "failed"})
+        
+        # Track LLM processing duration (even for failures)
+        record_histogram_value("llm_processing_duration_seconds", processing_time)
+        
+        # Re-raise the exception
+        raise
 
 
 @app.put("/clients/{client_id}/upload-document")
