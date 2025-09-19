@@ -4,6 +4,9 @@ from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+# Import telemetry functions
+from telemetry import increment_counter
+
 
 class Settings(BaseSettings):
     database_url: str = os.getenv(
@@ -20,8 +23,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
     """Dependency to get database session"""
+    # Track database connection opened
+    increment_counter("database_connections_total", 1, {"status": "opened"})
+    
     db = SessionLocal()
     try:
         yield db
     finally:
+        # Track database connection closed
+        increment_counter("database_connections_total", 1, {"status": "closed"})
         db.close()
